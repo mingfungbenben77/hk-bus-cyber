@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>香港巴士實時 | KMB + 城巴 - CYBER BUS v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Noto+Sans+TC:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#060a14; --panel:#101a30; --panel2:#162240; --cyan:#00f2ff; --magenta:#ff2a9a; --yellow:#ffe600; --text:#e6eeff; --dim:#8aa0c8; --border:rgba(0,242,255,0.18); --kmb:#ff3b30; --ctb:#ffcc00;}
+*{box-sizing:border-box}
+body{margin:0; background:var(--bg); color:var(--text); font-family:'Noto Sans TC', sans-serif; min-height:100vh;
+background-image: radial-gradient(900px 500px at 15% 0%, rgba(0,242,255,0.12), transparent), radial-gradient(700px 400px at 95% 10%, rgba(255,42,154,0.12), transparent), linear-gradient(rgba(0,242,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,242,255,0.03) 1px, transparent 1px); background-size:auto,auto,44px 44px,44px 44px;}
+.header{position:sticky; top:0; z-index:10; backdrop-filter:blur(16px); background:rgba(6,10,20,0.88); border-bottom:1px solid var(--border); padding:12px 16px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;}
+.brand{font-family:'Orbitron'; font-weight:800; letter-spacing:0.08em; font-size:18px}
+.brand span{color:var(--cyan); text-shadow:0 0 12px var(--cyan)}
+.sub{font-family:'JetBrains Mono'; font-size:10px; color:var(--dim); letter-spacing:0.12em; text-transform:uppercase; margin-top:2px}
+.controls{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.search-box{position:relative}
+.search-box input{width:300px; max-width:55vw; background:#0a1230; border:1px solid var(--border); border-radius:12px; padding:12px 44px 12px 14px; color:var(--cyan); font-size:17px; font-weight:700; outline:none}
+.search-box button{position:absolute; right:6px; top:6px; bottom:6px; background:linear-gradient(90deg,var(--cyan),#0099ff); border:none; border-radius:10px; padding:0 12px; font-family:'Orbitron'; font-weight:700; cursor:pointer; color:#00131a}
+.filter{display:flex; gap:6px}
+.filter button{padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:#0a1230; color:var(--dim); font-family:'Orbitron'; font-size:11px; cursor:pointer}
+.filter button.active{color:var(--cyan); border-color:var(--cyan); background:rgba(0,242,255,0.15); box-shadow:0 0 12px rgba(0,242,255,0.25)}
+.auto-box{display:flex; align-items:center; gap:8px; background:#0a1230; border:1px solid var(--border); border-radius:10px; padding:8px 10px; font-family:'JetBrains Mono'; font-size:11px; color:var(--dim)}
+.main{max-width:1280px; margin:0 auto; padding:14px}
+.stats{font-family:'JetBrains Mono'; font-size:10px; color:var(--dim); margin:6px 0 12px; letter-spacing:0.1em; display:flex; gap:12px; flex-wrap:wrap}
+.grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px}
+.card{background:linear-gradient(180deg,var(--panel) 0%, var(--panel2) 100%); border:1px solid var(--border); border-radius:16px; padding:12px; cursor:pointer}
+.card:hover{transform:translateY(-2px); border-color:rgba(0,242,255,0.45); box-shadow:0 8px 24px rgba(0,0,0,0.4), 0 0 20px rgba(0,242,255,0.15)}
+.card-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px}
+.route-badge{font-family:'Orbitron'; font-weight:800; font-size:26px; color:#fff}
+.company{font-size:10px; font-family:'Orbitron'; padding:3px 7px; border-radius:20px; border:1px solid}
+.company.KMB{background:rgba(255,59,48,0.15); color:#ff8a80; border-color:rgba(255,59,48,0.4)}
+.company.CTB{background:rgba(255,204,0,0.15); color:var(--ctb); border-color:rgba(255,204,0,0.4)}
+.dest{font-size:15px; font-weight:700; line-height:1.3; margin-bottom:3px}
+.orig{font-size:11px; color:var(--dim); margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.meta{display:flex; justify-content:space-between; align-items:center; font-family:'JetBrains Mono'; font-size:10px; color:var(--dim); border-top:1px dashed rgba(0,242,255,0.12); padding-top:6px}
+.eta{font-size:13px; font-weight:700; color:var(--cyan)}
+.overlay{position:fixed; inset:0; background:rgba(3,6,14,0.94); backdrop-filter:blur(12px); z-index:100; display:none; overflow:auto; padding:16px}
+.overlay.active{display:block}
+.modal{max-width:1080px; margin:0 auto; background:linear-gradient(180deg,#101a30,#0e1a36); border:1px solid rgba(0,242,255,0.25); border-radius:20px; overflow:hidden}
+.modal-head{padding:14px 16px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:12px; position:sticky; top:0; background:rgba(16,26,48,0.96); z-index:2}
+.modal-title{font-family:'Orbitron'; font-size:20px; font-weight:800}
+.close{width:40px; height:40px; border-radius:10px; border:1px solid rgba(255,255,255,0.15); background:#0a1230; color:#fff; font-size:18px; cursor:pointer}
+.elder-bar{display:flex; gap:8px; padding:8px 16px; background:rgba(255,230,0,0.08); border-bottom:1px dashed rgba(255,230,0,0.2); font-size:12px; color:var(--yellow)}
+.content-split{display:grid; grid-template-columns:1fr 1fr; gap:0}
+@media(max-width:900px){.content-split{grid-template-columns:1fr}}
+.map-wrap{height:70vh; min-height:420px; border-right:1px solid var(--border)}
+#map{height:100%; width:100%; background:#070c1a}
+.route-path{padding:12px 14px; max-height:70vh; overflow:auto}
+.stop-item{display:flex; gap:10px; padding:10px 8px; border-radius:10px; border:1px solid transparent; cursor:pointer}
+.stop-item:hover{background:rgba(0,242,255,0.06); border-color:rgba(0,242,255,0.15)}
+.stop-item.active{background:rgba(255,230,0,0.1); border-color:rgba(255,230,0,0.3)}
+.stop-dot{width:12px; height:12px; border-radius:50%; background:var(--panel2); border:3px solid var(--cyan); box-shadow:0 0 10px var(--cyan); margin-top:5px; flex-shrink:0; position:relative}
+.stop-dot:after{content:''; position:absolute; top:14px; left:50%; width:2px; height:24px; background:linear-gradient(var(--cyan), transparent); transform:translateX(-50%); opacity:0.3}
+.stop-item:last-child .stop-dot:after{display:none}
+.stop-info{flex:1}
+.stop-name{font-size:16px; font-weight:700; line-height:1.3}
+.stop-name-en{font-size:11px; color:var(--dim); margin-top:2px}
+.stop-eta{font-family:'JetBrains Mono'; font-size:12px; color:var(--cyan); background:rgba(0,242,255,0.1); padding:5px 8px; border-radius:8px; min-width:88px; text-align:right; height:fit-content}
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="brand">HONG KONG <span>BUS LINK v2</span> 九巴 • 城巴</div>
+    <div class="sub">Real-time ETA • Auto-refresh 30s • KMB lat/lon map</div>
+  </div>
+  <div class="controls">
+    <div class="search-box">
+      <input id="search" placeholder="路線 e.g. 101 / 2A">
+      <button id="searchBtn">搜尋</button>
+    </div>
+    <div class="filter">
+      <button class="active" data-filter="ALL">全部</button>
+      <button data-filter="KMB">九巴</button>
+      <button data-filter="CTB">城巴</button>
+    </div>
+    <div class="auto-box"><input type="checkbox" id="autoRefresh" checked><label for="autoRefresh">自動更新 30秒</label><span id="countdown" style="color:var(--yellow)">30s</span></div>
+  </div>
+</div>
+<div class="main">
+  <div class="stats"><span id="statTotal">載入中...</span><span id="statKmb"></span><span id="statCtb"></span><span id="statUpdate" style="margin-left:auto"></span></div>
+  <div class="grid" id="grid"></div>
+</div>
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modalTitle">路線 <small id="modalSub"></small></div>
+      <div style="display:flex; gap:8px; align-items:center"><button id="refreshRouteBtn" style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:#0a1230; color:var(--cyan); font-family:Orbitron; font-size:11px; cursor:pointer">↻ 更新 ETA</button><button class="close" id="closeBtn">✕</button></div>
+    </div>
+    <div class="elder-bar">👴 長者模式：大字體 • 地圖顯示巴士站位置 • 輕觸站點查詢到站時間</div>
+    <div class="content-split">
+      <div class="map-wrap"><div id="map"></div></div>
+      <div class="route-path" id="routePath"></div>
+    </div>
+  </div>
+</div>
+<script>
+const KMB_ROUTE_API='https://data.etabus.gov.hk/v1/transport/kmb/route/';
+const KMB_STOP_API='https://data.etabus.gov.hk/v1/transport/kmb/stop';
+const KMB_ROUTE_STOP_API='https://data.etabus.gov.hk/v1/transport/kmb/route-stop/';
+const KMB_ETA_API=(s,r,t)=>`https://data.etabus.gov.hk/v1/transport/kmb/eta/${s}/${r}/${t}`;
+const CTB_ROUTE_API='https://rt.data.gov.hk/v1/transport/citybus-nwfb/route/CTB';
+const CTB_ROUTE_STOP=(r,d)=>`https://rt.data.gov.hk/v1/transport/citybus-nwfb/route-stop/CTB/${r}/${d}`;
+const CTB_STOP_API=(id)=>`https://rt.data.gov.hk/v1/transport/citybus-nwfb/stop/${id}`;
+const CTB_ETA_V2=(s,r)=>`https://rt.data.gov.hk/v2/transport/citybus/eta/CTB/${s}/${r}`;
+const CTB_ETA_V1=(s,r)=>`https://rt.data.gov.hk/v1/transport/citybus-nwfb/eta/CTB/${s}/${r}`;
+let allRoutes=[], kmbStopsCache={}, currentFilter='ALL', autoTimer=null, countdownTimer=null, remaining=30, map=null, markers=[], currentRouteData=null;
+async function fetchJson(u){const r=await fetch(u); if(!r.ok) throw new Error(u); return r.json();}
+async function loadData(){
+  document.getElementById('statTotal').textContent='正在載入九巴及城巴...';
+  const [kmbRes, ctbRes, kmbStopRes]=await Promise.all([fetchJson(KMB_ROUTE_API).catch(()=>({data:[]})), fetchJson(CTB_ROUTE_API).catch(()=>({data:[]})), fetchJson(KMB_STOP_API).catch(()=>({data:[]}))]);
+  (kmbStopRes.data||[]).forEach(s=>{ kmbStopsCache[s.stop]=s; });
+  const kmbRoutes=(kmbRes.data||[]).map(x=>({route:x.route, orig:x.orig_tc||x.orig_en, dest:x.dest_tc||x.dest_en, orig_en:x.orig_en, dest_en:x.dest_en, bound:x.bound, service_type:x.service_type, co:'KMB'}))
+  const ctbRoutes=(ctbRes.data||[]).map(x=>({route:x.route, orig:x.orig_tc||x.orig_en, dest:x.dest_tc||x.dest_en, orig_en:x.orig_en, dest_en:x.dest_en, bound:'I', service_type:'', co:'CTB'}))
+  allRoutes=[...kmbRoutes, ...ctbRoutes]; allRoutes.sort((a,b)=>a.route.localeCompare(b.route,undefined,{numeric:true}));
+  document.getElementById('statTotal').textContent=`總路線: ${allRoutes.length}`;
+  document.getElementById('statKmb').textContent=`九巴: ${kmbRoutes.length}`;
+  document.getElementById('statCtb').textContent=`城巴: ${ctbRoutes.length}`;
+  updateTime(); renderGrid();
+}
+function updateTime(){document.getElementById('statUpdate').textContent='更新: '+new Date().toLocaleTimeString()+' • 自動30s';}
+const grid=document.getElementById('grid');
+const searchInput=document.getElementById('search');
+const overlay=document.getElementById('overlay');
+function renderGrid(){
+  const q=searchInput.value.trim().toUpperCase();
+  let list=allRoutes; if(currentFilter!=='ALL') list=list.filter(r=>r.co===currentFilter);
+  if(q) list=list.filter(r=>r.route.toUpperCase().includes(q));
+  const show=list.slice(0,400);
+  grid.innerHTML=show.map(r=>`<div class="card" data-route="${r.route}" data-co="${r.co}" data-bound="${r.bound}" data-service="${r.service_type}"><div class="card-top"><div class="route-badge">${r.route}</div><div class="company ${r.co}">${r.co==='KMB'?'九巴 KMB':'城巴 CTB'}</div></div><div class="dest">往 ${r.dest}</div><div class="orig">由 ${r.orig}</div><div class="meta"><span>${r.bound} ${r.service_type?'• '+r.service_type:''}</span><span class="eta">點擊查看地圖 →</span></div></div>`).join('')||`<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--dim)">沒有找到 "${q}"</div>`;
+  grid.querySelectorAll('.card').forEach(c=>c.addEventListener('click',()=>openRoute(c.dataset.route,c.dataset.co,c.dataset.bound,c.dataset.service)));
+}
+function initMap(){ if(map){map.invalidateSize(); return;} map=L.map('map').setView([22.3027,114.178],11); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map); }
+function clearMarkers(){ markers.forEach(m=>{try{map.removeLayer(m)}catch{}}); markers=[]; }
+function formatEta(s){ if(!s) return '未有資料'; const d=new Date(s); const diff=Math.round((d-new Date())/60000); if(diff<=0) return '即將到達'; return diff+' 分鐘'; }
+async function openRoute(route, co, bound, serviceType){
+  overlay.classList.add('active'); initMap(); setTimeout(()=>map.invalidateSize(),200);
+  document.getElementById('modalTitle').innerHTML=`${route} <small style="font-family:Orbitron">${co}</small>`;
+  document.getElementById('routePath').innerHTML='<div style="padding:30px;text-align:center">載入路線及地圖中...</div>';
+  clearMarkers(); currentRouteData={route, co, bound, serviceType, stops:[]};
+  try{
+    if(co==='KMB'){
+      const rs=await fetchJson(`${KMB_ROUTE_STOP_API}${route}/${bound}/${serviceType}`);
+      const stops=rs.data||[]; currentRouteData.stops=stops;
+      let html=''; const latlngs=[];
+      stops.forEach((s,i)=>{ const info=kmbStopsCache[s.stop]||{}; const lat=parseFloat(info.lat), lng=parseFloat(info.long); if(!isNaN(lat)&&!isNaN(lng)) latlngs.push([lat,lng]); html+=`<div class="stop-item" data-stop="${s.stop}" data-idx="${i}"><div class="stop-dot"></div><div class="stop-info"><div class="stop-name">${i+1}. ${info.name_tc||s.stop}</div><div class="stop-name-en">${info.name_en||''} • ID ${s.stop} ${lat?`• ${lat.toFixed(4)},${lng.toFixed(4)}`:''}</div></div><div class="stop-eta" id="eta-${s.stop}">--</div></div>`; });
+      document.getElementById('routePath').innerHTML=html;
+      stops.forEach((s,i)=>{ const info=kmbStopsCache[s.stop]||{}; const lat=parseFloat(info.lat), lng=parseFloat(info.long); if(isNaN(lat)||isNaN(lng)) return; const mk=L.marker([lat,lng]).addTo(map).bindPopup(`<b>${i+1}. ${info.name_tc}</b><br>${info.name_en}<br>ETA: <span id="pop-eta-${s.stop}">載入中</span>`); mk._stopId=s.stop; markers.push(mk); mk.on('click',()=>{ fetchKmbEta(s.stop, route, serviceType); }); });
+      if(latlngs.length){ const poly=L.polyline(latlngs,{color:'#00f2ff', weight:3, opacity:0.7, dashArray:'8,8'}).addTo(map); markers.push(poly); map.fitBounds(poly.getBounds(),{padding:[20,20]}); }
+      attachHandlers(); for(let s of stops.slice(0,5)) fetchKmbEta(s.stop, route, serviceType);
+    }else{
+      let stops=[]; try{ const r1=await fetchJson(CTB_ROUTE_STOP(route,'inbound')); stops=r1.data||[]; if(!stops.length) throw new Error('empty'); }catch{ try{ const r2=await fetchJson(CTB_ROUTE_STOP(route,'outbound')); stops=r2.data||[]; }catch{ stops=[]; } }
+      currentRouteData.stops=stops; if(!stops.length){ document.getElementById('routePath').innerHTML='<div style="padding:20px">此路線暫無站點資料</div>'; return; }
+      let html=''; const latlngs=[];
+      for(let i=0;i<stops.length;i++){ const s=stops[i]; let info={name_tc:s.stop, name_en:''}; try{ const sd=await fetchJson(CTB_STOP_API(s.stop)); info=sd.data||info; }catch{} const lat=parseFloat(info.lat), lng=parseFloat(info.long); if(!isNaN(lat)&&!isNaN(lng)) latlngs.push([lat,lng]); html+=`<div class="stop-item" data-stop="${s.stop}" data-idx="${i}"><div class="stop-dot"></div><div class="stop-info"><div class="stop-name">${i+1}. ${info.name_tc||s.stop}</div><div class="stop-name-en">${info.name_en||''} • ${s.stop}</div></div><div class="stop-eta" id="eta-${s.stop}">--</div></div>`; if(!isNaN(lat)&&!isNaN(lng)){ const mk=L.marker([lat,lng]).addTo(map).bindPopup(`<b>${i+1}. ${info.name_tc}</b><br>ETA`); mk._stopId=s.stop; markers.push(mk); } }
+      document.getElementById('routePath').innerHTML=html;
+      if(latlngs.length){ const poly=L.polyline(latlngs,{color:'#ffcc00', weight:3, opacity:0.7, dashArray:'8,8'}).addTo(map); markers.push(poly); map.fitBounds(poly.getBounds(),{padding:[20,20]}); }
+      attachHandlers(); for(let s of stops.slice(0,5)) fetchCtbEta(s.stop, route);
+    }
+  }catch(e){ document.getElementById('routePath').innerHTML=`<div style="padding:20px">失敗: ${e.message}</div>`; }
+}
+function attachHandlers(){ document.querySelectorAll('.stop-item').forEach(el=>{ el.addEventListener('click',()=>{ document.querySelectorAll('.stop-item').forEach(x=>x.classList.remove('active')); el.classList.add('active'); const stop=el.dataset.stop; if(currentRouteData?.co==='KMB') fetchKmbEta(stop, currentRouteData.route, currentRouteData.serviceType); else fetchCtbEta(stop, currentRouteData.route); const m=markers.find(mm=>mm._stopId===stop); if(m && m.getLatLng) map.panTo(m.getLatLng()); }); }); }
+async function fetchKmbEta(stopId, route, serviceType){ const el=document.getElementById(`eta-${stopId}`); const pop=document.getElementById(`pop-eta-${stopId}`); if(el) el.textContent='查詢中...'; try{ const data=await fetchJson(KMB_ETA_API(stopId, route, serviceType)); const etas=(data.data||[]).filter(e=>e.eta).slice(0,3); const txt=etas.length? etas.map(e=>`${formatEta(e.eta)}${e.rmk_tc?' ('+e.rmk_tc+')':''}`).join('<br>'):'暫無班次'; if(el) el.innerHTML=txt; if(pop) pop.innerHTML=txt; if(el) el.style.color='var(--yellow)'; }catch{ if(el) el.textContent='失敗'; } }
+async function fetchCtbEta(stopId, route){ const el=document.getElementById(`eta-${stopId}`); const pop=document.getElementById(`pop-eta-${stopId}`); if(el) el.textContent='查詢中...'; try{ let data; try{ data=await fetchJson(CTB_ETA_V2(stopId, route)); }catch{ data=await fetchJson(CTB_ETA_V1(stopId, route)); } const etas=(data.data||[]).filter(e=>e.eta).slice(0,3); const txt=etas.length? etas.map(e=>`${formatEta(e.eta)}${e.rmk_tc?' ('+e.rmk_tc+')':''}`).join('<br>'):'暫無班次'; if(el) el.innerHTML=txt; if(pop) pop.innerHTML=txt; if(el) el.style.color='var(--yellow)'; }catch{ if(el) el.textContent='失敗'; } }
+function startAutoRefresh(){ stopAutoRefresh(); remaining=30; document.getElementById('countdown').textContent='30s'; autoTimer=setInterval(()=>{ loadData(); if(currentRouteData){ currentRouteData.stops.slice(0,8).forEach(s=>{ if(currentRouteData.co==='KMB') fetchKmbEta(s.stop||s.stop, currentRouteData.route, currentRouteData.serviceType); else fetchCtbEta(s.stop, currentRouteData.route); }); } updateTime(); remaining=30; },30000); countdownTimer=setInterval(()=>{ remaining--; document.getElementById('countdown').textContent=remaining+'s'; if(remaining<=0) remaining=30; },1000); }
+function stopAutoRefresh(){ clearInterval(autoTimer); clearInterval(countdownTimer); autoTimer=null; }
+document.getElementById('autoRefresh').addEventListener('change', e=>{ if(e.target.checked) startAutoRefresh(); else { stopAutoRefresh(); document.getElementById('countdown').textContent='OFF'; } });
+document.getElementById('searchBtn').addEventListener('click', renderGrid);
+searchInput.addEventListener('input', renderGrid);
+document.querySelectorAll('.filter button').forEach(b=>b.addEventListener('click',()=>{ document.querySelectorAll('.filter button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); currentFilter=b.dataset.filter; renderGrid(); }));
+document.getElementById('closeBtn').addEventListener('click',()=>overlay.classList.remove('active'));
+overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.classList.remove('active'); });
+document.getElementById('refreshRouteBtn').addEventListener('click',()=>{ if(!currentRouteData) return; currentRouteData.stops.slice(0,10).forEach(s=>{ if(currentRouteData.co==='KMB') fetchKmbEta(s.stop, currentRouteData.route, currentRouteData.serviceType); else fetchCtbEta(s.stop, currentRouteData.route); }); });
+loadData(); startAutoRefresh();
+</script>
+</body>
+</html>
