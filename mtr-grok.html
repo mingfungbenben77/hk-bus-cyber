@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MTR Live Train Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      min-height: 100vh;
+    }
+    
+    .card {
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    
+    .train-card {
+      transition: all 0.2s ease;
+    }
+    
+    .train-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    
+    .pulse {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .select-arrow {
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%94a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+      background-position: right 0.5rem center;
+      background-repeat: no-repeat;
+      background-size: 1.5em 1.5em;
+      padding-right: 2.5rem;
+    }
+  </style>
+</head>
+<body class="text-slate-100">
+  <div class="max-w-5xl mx-auto px-4 py-8">
+    
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight flex items-center gap-3">
+          <span class="text-sky-400"><i class="fas fa-train-subway"></i></span>
+          MTR Live Dashboard
+        </h1>
+        <p class="text-slate-400 mt-1 text-sm">Real-time train arrivals • data.gov.hk</p>
+      </div>
+      
+      <div class="flex items-center gap-3">
+        <div id="status" class="text-xs text-slate-400 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 pulse"></span>
+          <span id="last-update">Loading...</span>
+        </div>
+        <button onclick="fetchData(true)" 
+                class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg text-sm font-medium transition flex items-center gap-2">
+          <i class="fas fa-rotate"></i> Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card rounded-2xl p-5 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Line</label>
+          <select id="lineSelect" 
+                  class="w-full bg-slate-800/80 border border-slate-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 select-arrow appearance-none">
+            <!-- populated by JS -->
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1.5 uppercase tracking-wider">Station</label>
+          <select id="stationSelect" 
+                  class="w-full bg-slate-800/80 border border-slate-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 select-arrow appearance-none">
+            <!-- populated by JS -->
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Current Station Title -->
+    <div class="mb-5">
+      <h2 id="stationTitle" class="text-xl font-semibold text-slate-200">Select a station</h2>
+    </div>
+
+    <!-- Loading / Error -->
+    <div id="loading" class="hidden text-center py-16">
+      <div class="inline-block w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+      <p class="mt-4 text-slate-400">Fetching live data...</p>
+    </div>
+
+    <div id="error" class="hidden card rounded-2xl p-6 border-red-500/30 bg-red-500/10 text-red-300">
+      <i class="fas fa-triangle-exclamation mr-2"></i>
+      <span id="errorMsg"></span>
+    </div>
+
+    <!-- Train Results -->
+    <div id="results" class="hidden grid grid-cols-1 lg:grid-cols-2 gap-5">
+      
+      <!-- UP Direction -->
+      <div class="card rounded-2xl overflow-hidden">
+        <div class="bg-gradient-to-r from-emerald-600/20 to-transparent px-5 py-4 border-b border-slate-700/50 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <i class="fas fa-arrow-up"></i>
+          </div>
+          <div>
+            <h3 class="font-semibold">UP Direction</h3>
+            <p class="text-xs text-slate-400">Towards end of line</p>
+          </div>
+        </div>
+        <div id="upTrains" class="p-4 space-y-3 min-h-[180px]">
+          <!-- trains injected here -->
+        </div>
+      </div>
+
+      <!-- DOWN Direction -->
+      <div class="card rounded-2xl overflow-hidden">
+        <div class="bg-gradient-to-r from-rose-600/20 to-transparent px-5 py-4 border-b border-slate-700/50 flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-400">
+            <i class="fas fa-arrow-down"></i>
+          </div>
+          <div>
+            <h3 class="font-semibold">DOWN Direction</h3>
+            <p class="text-xs text-slate-400">Towards other end</p>
+          </div>
+        </div>
+        <div id="downTrains" class="p-4 space-y-3 min-h-[180px]">
+          <!-- trains injected here -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-10 text-center text-xs text-slate-500">
+      Data updates every ~10 seconds from the official MTR Next Train API<br>
+      Not affiliated with MTR Corporation
+    </div>
+  </div>
+
+  <script>
+    // ====================== DATA ======================
+    const LINES = {
+      "AEL": { name: "Airport Express", stations: [
+        ["HOK","Hong Kong"],["KOW","Kowloon"],["TSY","Tsing Yi"],["AIR","Airport"],["AWE","AsiaWorld-Expo"]
+      ]},
+      "TCL": { name: "Tung Chung Line", stations: [
+        ["HOK","Hong Kong"],["KOW","Kowloon"],["OLY","Olympic"],["NAC","Nam Cheong"],
+        ["LAK","Lai King"],["TSY","Tsing Yi"],["SUN","Sunny Bay"],["TUC","Tung Chung"]
+      ]},
+      "TML": { name: "Tuen Ma Line", stations: [
+        ["WKS","Wu Kai Sha"],["MOS","Ma On Shan"],["HEO","Heng On"],["TSH","Tai Shui Hang"],
+        ["SHM","Shek Mun"],["CIO","City One"],["STW","Sha Tin Wai"],["CKT","Che Kung Temple"],
+        ["TAW","Tai Wai"],["HIK","Hin Keng"],["DIH","Diamond Hill"],["KAT","Kai Tak"],
+        ["SUW","Sung Wong Toi"],["TKW","To Kwa Wan"],["HOM","Ho Man Tin"],["HUH","Hung Hom"],
+        ["ETS","East Tsim Sha Tsui"],["AUS","Austin"],["NAC","Nam Cheong"],["MEF","Mei Foo"],
+        ["TWW","Tsuen Wan West"],["KSR","Kam Sheung Road"],["YUL","Yuen Long"],["LOP","Long Ping"],
+        ["TIS","Tin Shui Wai"],["SIH","Siu Hong"],["TUM","Tuen Mun"]
+      ]},
+      "TKL": { name: "Tseung Kwan O Line", stations: [
+        ["NOP","North Point"],["QUB","Quarry Bay"],["YAT","Yau Tong"],["TIK","Tiu Keng Leng"],
+        ["TKO","Tseung Kwan O"],["LHP","LOHAS Park"],["HAH","Hang Hau"],["POA","Po Lam"]
+      ]},
+      "EAL": { name: "East Rail Line", stations: [
+        ["ADM","Admiralty"],["EXC","Exhibition Centre"],["HUH","Hung Hom"],["MKK","Mong Kok East"],
+        ["KOT","Kowloon Tong"],["TAW","Tai Wai"],["SHT","Sha Tin"],["FOT","Fo Tan"],
+        ["RAC","Racecourse"],["UNI","University"],["TAP","Tai Po Market"],["TWO","Tai Wo"],
+        ["FAN","Fanling"],["SHS","Sheung Shui"],["LOW","Lo Wu"],["LMC","Lok Ma Chau"]
+      ]},
+      "SIL": { name: "South Island Line", stations: [
+        ["ADM","Admiralty"],["OCP","Ocean Park"],["WCH","Wong Chuk Hang"],["LET","Lei Tung"],["SOH","South Horizons"]
+      ]},
+      "TWL": { name: "Tsuen Wan Line", stations: [
+        ["CEN","Central"],["ADM","Admiralty"],["TST","Tsim Sha Tsui"],["JOR","Jordan"],
+        ["YMT","Yau Ma Tei"],["MOK","Mong Kok"],["PRE","Prince Edward"],["SSP","Sham Shui Po"],
+        ["CSW","Cheung Sha Wan"],["LCK","Lai Chi Kok"],["MEF","Mei Foo"],["LAK","Lai King"],
+        ["KWF","Kwai Fong"],["KWH","Kwai Hing"],["TWH","Tai Wo Hau"],["TSW","Tsuen Wan"]
+      ]},
+      "ISL": { name: "Island Line", stations: [
+        ["KET","Kennedy Town"],["HKU","HKU"],["SYP","Sai Ying Pun"],["SHW","Sheung Wan"],
+        ["CEN","Central"],["ADM","Admiralty"],["WAC","Wan Chai"],["CAB","Causeway Bay"],
+        ["TIH","Tin Hau"],["FOH","Fortress Hill"],["NOP","North Point"],["QUB","Quarry Bay"],
+        ["TAK","Tai Koo"],["SWH","Sai Wan Ho"],["SKW","Shau Kei Wan"],["HFC","Heng Fa Chuen"],["CHW","Chai Wan"]
+      ]},
+      "KTL": { name: "Kwun Tong Line", stations: [
+        ["WHA","Whampoa"],["HOM","Ho Man Tin"],["YMT","Yau Ma Tei"],["MOK","Mong Kok"],
+        ["PRE","Prince Edward"],["SKM","Shek Kip Mei"],["KOT","Kowloon Tong"],["LOF","Lok Fu"],
+        ["WTS","Wong Tai Sin"],["DIH","Diamond Hill"],["CHH","Choi Hung"],["KOB","Kowloon Bay"],
+        ["NTK","Ngau Tau Kok"],["KWT","Kwun Tong"],["LAT","Lam Tin"],["YAT","Yau Tong"],["TIK","Tiu Keng Leng"]
+      ]},
+      "DRL": { name: "Disneyland Resort Line", stations: [
+        ["SUN","Sunny Bay"],["DIS","Disneyland Resort"]
+      ]}
+    };
+
+    // Build destination name lookup
+    const DEST_NAMES = {};
+    Object.values(LINES).forEach(line => {
+      line.stations.forEach(([code, name]) => DEST_NAMES[code] = name);
+    });
+
+    // ====================== UI LOGIC ======================
+    const lineSelect = document.getElementById('lineSelect');
+    const stationSelect = document.getElementById('stationSelect');
+    const stationTitle = document.getElementById('stationTitle');
+    const results = document.getElementById('results');
+    const loading = document.getElementById('loading');
+    const errorBox = document.getElementById('error');
+    const errorMsg = document.getElementById('errorMsg');
+    const lastUpdate = document.getElementById('last-update');
+
+    // Populate line dropdown
+    Object.entries(LINES).forEach(([code, info]) => {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = `${code} – ${info.name}`;
+      lineSelect.appendChild(opt);
+    });
+
+    // Populate stations when line changes
+    function populateStations() {
+      const line = lineSelect.value;
+      stationSelect.innerHTML = '';
+      LINES[line].stations.forEach(([code, name]) => {
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = `${name} (${code})`;
+        stationSelect.appendChild(opt);
+      });
+      updateTitle();
+      fetchData();
+    }
+
+    function updateTitle() {
+      const line = lineSelect.value;
+      const station = stationSelect.value;
+      const stationName = LINES[line].stations.find(s => s[0] === station)?.[1] || station;
+      stationTitle.textContent = `${LINES[line].name} — ${stationName}`;
+    }
+
+    lineSelect.addEventListener('change', populateStations);
+    stationSelect.addEventListener('change', () => {
+      updateTitle();
+      fetchData();
+    });
+
+    // ====================== DATA FETCHING ======================
+    async function fetchData(manual = false) {
+      const line = lineSelect.value;
+      const sta = stationSelect.value;
+      if (!line || !sta) return;
+
+      loading.classList.remove('hidden');
+      results.classList.add('hidden');
+      errorBox.classList.add('hidden');
+
+      try {
+        const url = `https://rt.data.gov.hk/v1/transport/mtr/getSchedule.php?line=${line}&sta=${sta}&lang=EN`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        loading.classList.add('hidden');
+
+        if (data.status === 0) {
+          errorMsg.textContent = data.message || "Special train service arrangements in place.";
+          errorBox.classList.remove('hidden');
+          return;
+        }
+
+        const key = `${line}-${sta}`;
+        const stationData = data.data?.[key] || {};
+        const up = stationData.UP || [];
+        const down = stationData.DOWN || [];
+
+        renderTrains('upTrains', up);
+        renderTrains('downTrains', down);
+
+        results.classList.remove('hidden');
+        lastUpdate.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+
+      } catch (err) {
+        loading.classList.add('hidden');
+        errorMsg.textContent = "Failed to fetch data. Please try again.";
+        errorBox.classList.remove('hidden');
+        console.error(err);
+      }
+    }
+
+    function renderTrains(containerId, trains) {
+      const container = document.getElementById(containerId);
+      
+      const valid = trains.filter(t => t.valid === "Y");
+      
+      if (valid.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-slate-500">
+            <i class="fas fa-moon text-2xl mb-2"></i>
+            <p>No trains currently scheduled</p>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = valid.map(t => {
+        const mins = t.ttnt;
+        const dest = DEST_NAMES[t.dest] || t.dest;
+        const plat = t.plat || "-";
+        const time = t.time ? t.time.slice(11, 16) : "";
+
+        let minsDisplay = mins;
+        let minsClass = "text-sky-400";
+        if (mins === "0" || mins === "1") {
+          minsDisplay = mins === "0" ? "Arriving" : "1 min";
+          minsClass = "text-emerald-400";
+        } else {
+          minsDisplay = `${mins} min`;
+        }
+
+        return `
+          <div class="train-card bg-slate-800/50 border border-slate-700/50 rounded-xl p-4 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <div class="text-2xl font-bold ${minsClass} w-16 text-center">${minsDisplay}</div>
+              <div>
+                <div class="font-medium text-slate-100">${dest}</div>
+                <div class="text-xs text-slate-400 mt-0.5">Platform ${plat}</div>
+              </div>
+            </div>
+            <div class="text-right text-sm text-slate-400">
+              ${time}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Initial load
+    populateStations();
+
+    // Auto refresh every 12 seconds
+    setInterval(() => fetchData(), 12000);
+  </script>
+</body>
+</html>
